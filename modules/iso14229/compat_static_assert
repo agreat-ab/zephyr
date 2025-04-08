@@ -1,0 +1,35 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+
+# Path to the amalgamated header file
+my $header_path = $ARGV[0];
+
+die "Error: Header file not found at $header_path\n" unless -f $header_path;
+
+# Read the entire file into memory
+open my $fh, '<', $header_path or die "Cannot open file: $!";
+my $content = do { local $/; <$fh> };
+close $fh;
+
+# Add Zephyr's assert.h include after the first include guard
+$content =~ s/(#ifndef ISO14229_H)/$1\n#include <zephyr\/sys\/util.h>/;
+
+# Replace single-line static_assert calls with __ASSERT
+$content =~ s/static_assert\s*\(([^,]+),\s*(".*?"\s*)\);/__ASSERT(($1), $2);/g;
+
+# Replace multi-line static_assert calls with __ASSERT
+# This handles multi-line assertions with formatting like:
+# static_assert((condition1 &&
+#                condition2 &&
+#                condition3),
+#               "error message");
+$content =~ s/static_assert\s*\(\(([^)]+)\)([^)]*)\);/__ASSERT(($1)$2);/gs;
+
+# Write the modified content back to the file
+open $fh, '>', $header_path or die "Cannot write to file: $!";
+print $fh $content;
+close $fh;
+
+print "Successfully replaced static_assert with __ASSERT in $header_path\n";

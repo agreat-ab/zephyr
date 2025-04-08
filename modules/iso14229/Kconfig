@@ -1,0 +1,11 @@
+# Copyright (c) 2025 Zephyr Project
+# SPDX-License-Identifier: Apache-2.0
+
+config ZEPHYR_ISO14229_MODULE
+	bool
+
+menuconfig ISO14229
+	bool "ISO14229 UDS Protocol Stack"
+	help
+	  This option enables the ISO14229 UDS (Unified Diagnostic Services)
+	  protocol stack.
