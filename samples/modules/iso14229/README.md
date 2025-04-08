@@ -1,34 +1,49 @@
-I'm so sorry that you too must futz with Freescale / NXP's byzantine drivers!
+# Hardware setup for testing
 
-This demo uses the [S32K144-EVB](https://www.keil.arm.com/boards/nxp-s32k144-evb-rev-a-ee981eb/features/)
+RPi (USB)->J-Link Base -> J-Link Cortex-M adapter -> SWD cable -> *DCD-LZ breakout board*
+RPi (USB)->USB to TTL cable->*DCD-LZ breakout board*
+*DCD-LZ breakout board*->MR-CANHUBK3 (P6)
+Rpi(USB)->PCAN usb -> homemade d-sub to jst gh cable (with can terminators) -> MR-CANHUBK3 (P12)
 
+AC mains->12v adapter to barrel jack-> barrel jack to JST SY --> JST SY to JST GH --> MR-CANHUBK3 (P27)
 
-# Building
+## Software setup for testing
 
-This uses `gcc-arm-none-eabi`, make sure it's installed first.
+The pcan driver was already part of the Raspbian distro. See appendix E [https://www.peak-system.com/produktcd/Pdf/English/PCAN-USB_UserMan_eng.pdf]
 
-```sh
-sudo apt install gcc-arm-none-eabi
-bazel build --config=s32k //examples/s32k144:main
-```
+Install segger jlink software pack
 
+[https://www.segger.com/downloads/jlink#J-LinkSoftwareAndDocumentationPack]
 
-# CMSIS-DAP
+[wget https://www.segger.com/downloads/jlink/JLink_Linux_arm64.deb]
 
-1. update programming interface from "OpenSDA" to CMSIS-DAP [1](https://community.nxp.com/t5/S32K/S32K144evb-with-CMSIS-DAP/td-p/1227900) [2](https://developer.arm.com/documentation/kan299/latest/)
-2. install `pyocd`
-3. `pyocd pack install S32K144UAxxxLLx`
-3. update `/etc/udev/rules.d/50-cmsis-dap.rules` with the following:
+Setup a zephyrproject according to Zephyr getting started guide [https://docs.zephyrproject.org/latest/develop/getting_started/index.html].
 
-```
-# c251:f002 S32K144-EVB
-SUBSYSTEM=="usb", ATTR{idVendor}=="c251", ATTR{idProduct}=="f002", MODE:="666"
-```
+Move origin to new remote called upstream, set oslundstrom/zephyr as origin and checkout any of the uds related branches. Then run west update.
 
-```
-pyocd gdbserver --persist -Otarget_override=S32K144UAxxxLLx
-```
+## Scripts
 
-# Physical Setup
+./scripts/send_uds_ecu_reset
+./scripts/send_uds_unknown
 
-- The S32K144-EVB needs an external 12V supply to power the CAN transciever
+# Resources
+
+Devboard: https://www.nxp.com/part/MR-CANHUBK344
+Standard: https://www.sis.se/produkter/fordonsteknik/diagnostik-underhalls-och-provningsutrustningar/iso-14229-32022/
+Procure: https://www.mouser.se/ProductDetail/NXP-Semiconductors/MR-CANHUBK344?qs=ulEaXIWI0c%2FcZcyHO8xKsQ%3D%3D&srsltid=AfmBOopx4huYh7UhgGN1_Ykb7Ss5TmiOxJhXvh2I0J_qzpld_6s39dZArKo
+
+S32K3xx datasheet https://www.nxp.com/docs/en/data-sheet/S32K3xx.pdf
+
+# Evaluation of existing UDS libraries for use in zephyr
+
+Performed March 2025.
+
+| URL                                                               | commits | last commit | lang       | license        | comment                       |
+| ----------------------------------------------------------------- | ------- | ----------- | ---------- | -------------- | ----------------------------- |
+| ~~https://github.com/test-fullautomation/robotframework-uds<br>~~ | ~~141~~ | ~~2 mo~~    | ~~python~~ | ~~Apache-2.0~~ | Python                        |
+| ~~https://github.com/astand/uds-to-go<br>~~                       | ~~2~~   | ~~2 y~~     | ~~C/C++~~  | ~~MIT~~        | Inactive                      |
+| https://github.com/Serpent03/UDS-Protocol<br>                     | 144     | 1 y         | C          | none           | Looks incomplete (no license) |
+| https://github.com/driftregion/iso14229<br>                       | 222     | 1 week      | C          | MIT            |                               |
+| https://github.com/openxc/uds-c                                   | 118     | 4 y         | C          | BSD-3          | no server impl                |
+|                                                                   |         |             |            |                |                               |
+|                                                                   |         |             |            |                |                               |

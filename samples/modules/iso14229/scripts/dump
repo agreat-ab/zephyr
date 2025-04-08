@@ -1,0 +1,6 @@
+#!/bin/sh
+
+socat /dev/ttyUSB0,raw,b115200,cs8,clocal=0,cstopb=0 STDOUT &
+candump can0 &
+
+wait

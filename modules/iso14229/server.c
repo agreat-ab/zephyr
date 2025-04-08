@@ -164,10 +164,9 @@ static int uds_init()
 	}
 
 	struct can_timing timing;
-	// TODO: Make sampling point into Kconfig, and bitrate
-	ret = can_calc_timing(
-		can_dev, &timing, 500000,
-		875); // Sampling point relates to tradeoff between bandwidth and bus length
+	ret = can_calc_timing(can_dev, &timing, CONFIG_UDS_CAN_BITRATE,
+			      CONFIG_UDS_CAN_SAMPLEPOINT); // Sampling point relates to tradeoff
+							   // between bandwidth and bus length
 	if (ret > 0) {
 		LOG_DBG("Sample-Point error: %d\n", ret);
 	}

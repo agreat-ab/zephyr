@@ -49,6 +49,20 @@ config ISO14229_FUNC_RX_ID
 	help
 	  CAN ID for receiving functional (broadcast) UDS requests (default: 0x7DF).
 
+config UDS_CAN_BITRATE
+	hex "Bitrate (bit/s) for the CAN bus configured to process UDS retuests"
+	default 500000
+	range 125000 1000000
+	help
+	  Bitrate for the CAN bus configured to process UDS retuests
+
+config UDS_CAN_SAMPLEPOINT
+	hex "Samplepoint (in 0.1%, 800=80%) for the CAN bus configured to process UDS retuests"
+	default 750
+	range 500 900
+	help
+	  Samplepoint for the CAN bus configured to process UDS retuests
+
 config ISO14229_LOG_LEVEL
 	int "UDS Stack logging level"
 	default 0
