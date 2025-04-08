@@ -10,7 +10,7 @@ if(CONFIG_ISO14229)
   zephyr_compile_definitions(iso14229 INTERFACE
     UDS_TP_ISOTP_C
     UDS_SYS=UDS_SYS_UNIX
-    UDS_LOG_LEVEL=UDS_LOG_NONE
+    UDS_LOG_LEVEL=CONFIG_ISO14229_LOG_LEVEL
     UDS_CUSTOM_MILLIS
   )
 
@@ -56,6 +56,7 @@ if(CONFIG_ISO14229)
 
   # Add the generated source to the library
   zephyr_library_sources(${AMALGAMATED_C})
+  zephyr_library_sources(server.c)
 
   # Make sure the header is generated before compilation starts
   add_custom_target(iso14229_headers
@@ -67,10 +68,11 @@ if(CONFIG_ISO14229)
   # Set compile definitions
   zephyr_library_compile_definitions(UDS_TP_ISOTP_C)
   zephyr_library_compile_definitions(UDS_SYS=UDS_SYS_UNIX)
-  zephyr_library_compile_definitions(UDS_LOG_LEVEL=UDS_LOG_NONE)
+  zephyr_library_compile_definitions(UDS_LOG_LEVEL=CONFIG_ISO14229_LOG_LEVEL)
 
   # Add the include path for the generated header
   zephyr_include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
+  zephyr_include_directories(include)
 
   # Link the library with the interface
   zephyr_library_link_libraries(iso14229)

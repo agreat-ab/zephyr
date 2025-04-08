@@ -8,4 +8,57 @@ menuconfig ISO14229
 	bool "ISO14229 UDS Protocol Stack"
 	help
 	  This option enables the ISO14229 UDS (Unified Diagnostic Services)
-	  protocol stack.
+	  protocol stack for automotive diagnostic communications.
+
+if ISO14229
+
+config ISO14229_DEFAULT_SESSION_TIMEOUT_MS
+	int "Default diagnostic session timeout (ms)"
+	default 5000
+	range 1000 60000
+	help
+	  Timeout for diagnostic sessions in milliseconds. After this period
+	  of inactivity, the session will return to the default session.
+
+config ISO14229_CAN_MSGQ_SIZE
+	int "Size of the CAN reception queue"
+	default 10
+	range 4 32
+	help
+	  Size of the message queue for receiving CAN frames. Increase this
+	  if frames are being dropped due to queue overflow.
+
+config ISO14229_RX_ID
+	hex "CAN ID for receiving UDS requests (point to point)"
+	default 0x7E0
+	range 0x0 0x7FF
+	help
+	  CAN ID for receiving UDS requests (default: 0x7E0).
+
+config ISO14229_TX_ID
+	hex "CAN ID for transmitting UDS responses (point to point)"
+	default 0x7E8
+	range 0x0 0x7FF
+	help
+	  CAN ID for transmitting UDS responses (default: 0x7E8).
+
+config ISO14229_FUNC_RX_ID
+	hex "CAN ID for receiving functional (broadcast) UDS requests"
+	default 0x7DF
+	range 0x0 0x7FF
+	help
+	  CAN ID for receiving functional (broadcast) UDS requests (default: 0x7DF).
+
+config ISO14229_LOG_LEVEL
+	int "UDS Stack logging level"
+	default 0
+	range 0 4
+	help
+	  Logging level for the UDS stack.
+	  0 = No logging (UDS_LOG_NONE)
+	  1 = Error messages only (UDS_LOG_ERROR)
+	  2 = Error and warning messages (UDS_LOG_WARN)
+	  3 = Error, warning, and info messages (UDS_LOG_INFO)
+	  4 = All messages including debug (UDS_LOG_DEBUG)
+
+endif # ISO14229
