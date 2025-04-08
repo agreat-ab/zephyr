@@ -24,6 +24,14 @@ uint32_t UDSMillis(void);
  */
 uint8_t uds_poll_server(void);
 
+/* Define handler signatures for service handlers, to enforce use of the correct */
+/* args-structure */
+typedef UDSErr_t (*UDSGenericHandler_t)(UDSServer_t *srv, void *args, void *user_data);
+uint8_t uds_register_service_handler(UDSEvent_t evt, UDSGenericHandler_t handler, void *context);
+typedef UDSErr_t (*UDSECUResetHandler_t)(UDSServer_t *srv, UDSECUResetArgs_t *args,
+					 void *user_data);
+uint8_t uds_register_ecureset_handler(UDSEvent_t evt, UDSECUResetHandler_t handler, void *context);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,17 +1,52 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <zephyr/kernel.h>
-#include <zephyr/sys/reboot.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/can.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/toolchain/common.h>
 #include <zephyr/lib/iso14229/uds.h>
 
+LOG_MODULE_REGISTER(uds, CONFIG_LOG_DEFAULT_LEVEL);
+
+typedef struct {
+	UDSEvent_t evt;
+	UDSGenericHandler_t handler;
+	void *context;
+} uds_service_handler_t;
+
+static uds_service_handler_t service_handler_registry[UDS_EVT_MAX] = {0};
+
+uint8_t uds_register_service_handler(UDSEvent_t evt, UDSGenericHandler_t handler, void *context)
+{
+	if (service_handler_registry[evt].evt != 0) {
+		return -1;
+	}
+	service_handler_registry[evt].evt = evt;
+	service_handler_registry[evt].handler = handler;
+	service_handler_registry[evt].context = context;
+
+	return 0;
+}
+
+uint8_t uds_register_ecureset_handler(UDSEvent_t evt, UDSECUResetHandler_t handler, void *context)
+{
+	return uds_register_service_handler(evt, (UDSGenericHandler_t)handler, context);
+}
+
+static UDSErr_t fn(UDSServer_t *srv, UDSEvent_t ev, void *arg)
+{
+	if (service_handler_registry[ev].evt != 0) {
+		return service_handler_registry[ev].handler(srv, arg,
+							    service_handler_registry[ev].context);
+	} else {
+		LOG_ERR("Unhandled event %s (%d)\n", UDSEventToStr(ev), ev);
+		return UDS_NRC_ServiceNotSupported;
+	}
+}
+
 UDSServer_t srv;
 UDSISOTpC_t tp;
-
-LOG_MODULE_REGISTER(uds, CONFIG_LOG_DEFAULT_LEVEL);
 
 static const UDSISOTpCConfig_t tp_cfg = {
 	.source_addr = CONFIG_ISO14229_RX_ID,
@@ -72,27 +107,6 @@ uint32_t isotp_user_get_us(void)
 	return k_uptime_get_32();
 }
 
-static struct k_work_delayable reboot_work;
-
-static void do_reboot(struct k_work *work)
-{
-	sys_reboot(SYS_REBOOT_COLD);
-}
-
-static UDSErr_t fn(UDSServer_t *srv, UDSEvent_t ev, void *arg)
-{
-	switch (ev) {
-	case UDS_EVT_EcuReset:
-		LOG_INF("Scheduling reboot, from UDS_EVT_EcuReset\n");
-		k_work_schedule(&reboot_work, K_MSEC(1000));
-		break;
-	default:
-		LOG_ERR("Unhandled event %s (%d)\n", UDSEventToStr(ev), ev);
-		return UDS_NRC_ServiceNotSupported;
-	}
-	return UDS_PositiveResponse;
-}
-
 void uds_handle_frame(struct can_frame *frame)
 {
 	LOG_DBG("Handling work for UDS");
@@ -149,8 +163,6 @@ static int uds_init(void)
 {
 	uint8_t ret = 0;
 
-	k_work_init_delayable(&reboot_work, do_reboot);
-
 	LOG_DBG("Initializing CAN UDS module\n");
 
 	can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
@@ -182,7 +194,8 @@ static int uds_init(void)
 
 	ret = can_set_timing(can_dev, &timing);
 	if (ret != 0) {
-		LOG_ERR("Failed to set timing\n");
+		LOG_ERR("Failed to set timing with bitrate %d and samplepoint %d (%d)\n",
+			CONFIG_UDS_CAN_BITRATE, CONFIG_UDS_CAN_SAMPLEPOINT, ret);
 		return -1;
 	}
 
