@@ -5,6 +5,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/can.h>
+#include <zephyr/sys/reboot.h>
 #include <zephyr/logging/log.h>
 
 UDSServer_t srv;
@@ -20,6 +21,7 @@ static const UDSISOTpCConfig_t tp_cfg = {
 #define SLEEP_TIME_MS   1000
 #define LED0_NODE DT_ALIAS(led0)
 
+const struct device * can_dev;
 K_MSGQ_DEFINE(can_msgq, sizeof(struct can_frame), 10, 4);
 /*
  * A build error on this line means your board is unsupported.
@@ -29,12 +31,24 @@ static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
 int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data,
                                const uint8_t size, void *user_data) {
-    printf("Trying to send CAN frame from isotp layer (id: 0x%03lx)\n", arbitration_id);
-    // if (0 != BSPSendCAN(arbitration_id, data, size)) {
-        // return ISOTP_RET_ERROR;
-        // } else {
-        // return ISOTP_RET_OK;
-        // }
+  printf("Trying to send CAN frame from isotp layer (id: 0x%03lx)\n", arbitration_id);
+
+  struct can_frame frame = {
+      .id = arbitration_id,
+      .flags = 0x0,
+      .dlc = size,
+  };
+  memcpy(frame.data, data, size);
+
+  uint32_t ret = can_send(can_dev, &frame, K_MSEC(100), NULL, NULL);
+
+  if (ret != 0) {
+    printf("Failed to send CAN frame\n");
+    return -1;
+  } else {
+    printf("Sucessfully sent CAN frame with size %d\n", size);
+    return size;
+  }
 }
 
 void isotp_user_debug(const char *msg, ...) {
@@ -54,21 +68,46 @@ uint32_t isotp_user_get_us() {
   return k_uptime_get_32();
 }
 
+static struct k_work_delayable reboot_work;
+
+static void do_reboot(struct k_work *work) {
+  sys_reboot(SYS_REBOOT_COLD);
+}
+
 static uint8_t fn(UDSServer_t *srv, UDSEvent_t ev, const void *arg) {
-    return UDS_PositiveResponse;
+  printf("Handling %s\n", UDSEventToStr(ev));
+  switch (ev) {
+    case UDS_EVT_EcuReset:
+      printf("Scheduling reboot, from UDS_EVT_EcuReset\n");
+      k_work_schedule(&reboot_work, K_MSEC(1000));
+      break;
+    default:
+      printf("Unhandled event %s (%d)\n", UDSEventToStr(ev), ev);
+      return UDS_NRC_ServiceNotSupported;
+  }
+  return UDS_PositiveResponse;
 }
 
 
 int main() {
-  struct can_timing timing;
-  const struct device *const can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
-  if (!device_is_ready(can_dev)) {
-    printf("CAN: Device driver not ready.\n");
-    return 0;
-  }
+  k_work_init_delayable(&reboot_work, do_reboot);
+
   int ret;
 
+	bool led_state = true;
+
+	if (!gpio_is_ready_dt(&led)) {
+		return 0;
+	}
+
+	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+	if (ret < 0) {
+		return 0;
+	}
+
+  printf("===========================\n");
   printf("Initializing CAN UDS sample\n");
+  printf("===========================\n");
 
   ret = can_calc_timing(can_dev, &timing, 500000, 875); // Sampling point relates to tradeoff between bandwidth and bus length
   if (ret > 0) {
@@ -83,6 +122,13 @@ int main() {
   ret = can_stop(can_dev);
   if (ret != 0) {
     printf("Failed to stop CAN controller\n");
+  }
+
+  struct can_timing timing;
+  can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
+  if (!device_is_ready(can_dev)) {
+    printf("CAN: Device driver not ready.\n");
+    return 0;
   }
 
   ret = can_set_timing(can_dev, &timing);
@@ -109,17 +155,6 @@ int main() {
     printf("CAN controller configuration sucessful!\n");
   }
 
-	bool led_state = true;
-
-	if (!gpio_is_ready_dt(&led)) {
-		return 0;
-	}
-
-	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-	if (ret < 0) {
-		return 0;
-	}
-
   UDSErr_t uds_ret;
   uds_ret = UDSServerInit(&srv);
   if (uds_ret != 0) {
@@ -131,16 +166,9 @@ int main() {
     printf("Failed to initialize UDS ISO-TP client\n");
     return 0;
   }
+
   srv.fn = fn;
   srv.tp = &tp.hdl;
-
-  uint8_t my_data = 0x88;
-  struct can_frame hb_frame = {
-      .id = 0x123,
-      .flags = 0x0,
-      .dlc = 8,
-  };
-  memcpy(hb_frame.data, my_data, 8);
 
   for (;;) {
     if (k_msgq_get(&can_msgq, &frame, K_MSEC(100)) == 0) {
@@ -160,15 +188,13 @@ int main() {
     }
 
     UDSServerPoll(&srv);
+
+    // Do heartbeat blink
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0) {
 			return 0;
 		}
 
 		led_state = !led_state;
-		// printf("LED state: %s\n", led_state ? "ON" : "OFF");
-		// k_msleep(SLEEP_TIME_MS);
-		// can_send(can_dev, &hb_frame, K_MSEC(100), NULL, NULL); // Heartbeat for debugging
   }
-
 }
