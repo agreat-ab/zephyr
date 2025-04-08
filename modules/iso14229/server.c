@@ -17,7 +17,7 @@ static const UDSISOTpCConfig_t tp_cfg = {
 	.source_addr = CONFIG_ISO14229_RX_ID,
 	.target_addr = CONFIG_ISO14229_TX_ID,
 	.source_addr_func = CONFIG_ISO14229_FUNC_RX_ID,
-	// TODO: Should func address only be one?
+	/* TODO: Should func address only be one? */
 	.target_addr_func = UDS_TP_NOOP_ADDR,
 };
 
@@ -30,7 +30,7 @@ struct can_frame_work_info {
 	struct can_frame frame;
 } can_frame_work;
 
-// TODO: If we handle can frames in fast succession we will lose data
+/* TODO: If we handle can frames in fast succession we will lose data */
 
 int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, const uint8_t size,
 			void *user_data)
@@ -46,9 +46,10 @@ int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, cons
 	memcpy(frame.data, data, size);
 
 	uint32_t ret = can_send(can_dev, &frame, K_MSEC(100), NULL, NULL);
+
 	if (ret < 0) {
 		LOG_ERR("Failed to send CAN frame, %d\n", ret);
-		return ISOTP_RET_ERROR; // TODO: Should we return for retransmission ever?
+		return ISOTP_RET_ERROR; /* TODO: Should we return for retransmission ever? */
 	} else {
 		return ISOTP_RET_OK;
 	}
@@ -61,12 +62,12 @@ void isotp_user_debug(const char *msg, ...)
 
 uint32_t UDSMillis(void)
 {
-	// Return milliseconds from system, assumed relative time is sufficient
-	// TODO: Is assumption correct?
+	/* Return milliseconds from system, assumed relative time is sufficient */
+	/* TODO: Is assumption correct? */
 	return k_uptime_get_32();
 }
 
-uint32_t isotp_user_get_us()
+uint32_t isotp_user_get_us(void)
 {
 	return k_uptime_get_32();
 }
@@ -105,7 +106,7 @@ void uds_handle_frame(struct can_frame *frame)
 			LOG_ERR("Func frame received but cannot process because link is "
 				"not "
 				"idle\n");
-			// TODO: Should we not retransmit this?
+			/* TODO: Should we not retransmit this? */
 		} else {
 			isotp_on_can_message(&tp.func_link, frame->data, frame->dlc);
 		}
@@ -144,7 +145,7 @@ void uds_timer_function(struct k_timer *dummy)
 	UDSServerPoll(&srv);
 }
 
-static int uds_init()
+static int uds_init(void)
 {
 	uint8_t ret = 0;
 
@@ -164,16 +165,18 @@ static int uds_init()
 	}
 
 	struct can_timing timing;
+
 	ret = can_calc_timing(can_dev, &timing, CONFIG_UDS_CAN_BITRATE,
-			      CONFIG_UDS_CAN_SAMPLEPOINT); // Sampling point relates to tradeoff
-							   // between bandwidth and bus length
+			      CONFIG_UDS_CAN_SAMPLEPOINT);
+				  /* Sampling point relates to tradeoff */
+				  /* between bandwidth and bus length */
 	if (ret > 0) {
 		LOG_DBG("Sample-Point error: %d\n", ret);
 	}
 
 	if (ret < 0) {
 		LOG_ERR("Failed to calc a valid timing\n");
-		// TODO: Fallback sampling point value?
+		/* TODO: Fallback sampling point value? */
 		return -1;
 	}
 
@@ -188,7 +191,7 @@ static int uds_init()
 	struct can_filter filter;
 
 	filter.id = 0;
-	filter.mask = 0; // TODO: Filter the messages here
+	filter.mask = 0; /* TODO: Filter the messages here */
 	filter.flags = 0;
 
 	ret = can_add_rx_filter(can_dev, &can_queue_uds_work, NULL, &filter);
@@ -201,12 +204,14 @@ static int uds_init()
 	if (ret != 0) {
 		LOG_ERR("Failed to start CAN controller\n");
 		return -1;
-	} else {
-		LOG_INF("CAN controller configuration sucessful!\n");
 	}
 
+	LOG_INF("CAN controller configuration successful!\n");
+
 	UDSErr_t uds_ret;
+
 	uds_ret = UDSServerInit(&srv);
+
 	if (uds_ret != 0) {
 		LOG_ERR("Failed to initialize UDS server\n");
 		return -1;

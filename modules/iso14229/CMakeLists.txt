@@ -81,12 +81,10 @@ if(CONFIG_ISO14229)
   zephyr_library_link_libraries(iso14229)
 
   # Add source directories for IDE indexing
-  if(NOT CONFIG_ISO14229_MINIMAL_BUILD)
-    target_include_directories(iso14229 INTERFACE
-      ${ZEPHYR_CURRENT_MODULE_DIR}/src
-    )
-    target_include_directories(iso14229 INTERFACE
-      ${ZEPHYR_CURRENT_MODULE_DIR}/include
-    )
-  endif()
+  target_include_directories(iso14229 INTERFACE
+    ${ZEPHYR_CURRENT_MODULE_DIR}/src
+  )
+  target_include_directories(iso14229 INTERFACE
+    ${ZEPHYR_CURRENT_MODULE_DIR}/include
+  )
 endif()

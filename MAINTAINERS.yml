@@ -2509,6 +2509,19 @@ Mbed TLS:
     - benchmark.crypto.mbedtls
     - crypto.mbedtls
 
+"West project: iso14229":
+  status: maintained
+  maintainers:
+    - oslundstrom
+  files:
+    - samples/modules/iso14229/
+    - modules/iso14229/
+  labels:
+    - "area: CAN"
+    - "area: UDS"
+  description: >-
+    UDSonCAN implementation (iso14229)
+
 MCU Manager:
   status: maintained
   maintainers:
