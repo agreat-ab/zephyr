@@ -25,7 +25,14 @@ static const UDSISOTpCConfig_t tp_cfg = {
 
 const struct device *can_dev;
 
+static struct k_timer uds_timer;
+
 K_MSGQ_DEFINE(can_msgq, sizeof(struct can_frame), CONFIG_ISO14229_CAN_MSGQ_SIZE, 4);
+
+struct can_frame_work_info {
+	struct k_work uds_work;
+	struct can_frame frame;
+} can_frame_work;
 
 int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, const uint8_t size,
 			void *user_data)
@@ -40,8 +47,8 @@ int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, cons
 
 	uint32_t ret = can_send(can_dev, &frame, K_MSEC(100), NULL, NULL);
 
-	if (ret != 0) {
-		LOG_ERR("Failed to send CAN frame\n");
+	if (ret < 0) {
+		LOG_ERR("Failed to send CAN frame (%d)\n", ret);
 		return -1;
 	} else {
 		return size;
@@ -85,6 +92,56 @@ static UDSErr_t fn(UDSServer_t *srv, UDSEvent_t ev, void *arg)
 	return UDS_PositiveResponse;
 }
 
+void uds_handle_frame(struct can_frame *frame)
+{
+	LOG_INF("Handling work for UDS");
+
+	if (frame->id == tp.phys_sa) {
+		LOG_INF("Received phys can id 0x%03x\n", frame->id);
+		isotp_on_can_message(&tp.phys_link, frame->data, frame->dlc);
+	} else if (frame->id == tp.func_sa) {
+		LOG_INF("Received func can id 0x%03x\n", frame->id);
+		if (ISOTP_RECEIVE_STATUS_IDLE != tp.phys_link.receive_status) {
+			LOG_ERR("Func frame received but cannot process because link is "
+				"not "
+				"idle\n");
+		}
+		isotp_on_can_message(&tp.func_link, frame->data, frame->dlc);
+	} else {
+		LOG_ERR("Received unknown can id 0x%03x\n", frame->id);
+	}
+}
+
+void uds_poll_work_handler(struct k_work *frame_work)
+{
+	struct can_frame_work_info *info =
+		CONTAINER_OF(frame_work, struct can_frame_work_info, uds_work);
+	uds_handle_frame(&info->frame);
+}
+
+void can_queue_uds_work(const struct device *dev, struct can_frame *frame, void *user_data)
+{
+	uint8_t ret = 0;
+
+	memcpy(&can_frame_work.frame, frame, sizeof(struct can_frame));
+
+	ret = k_work_submit(&can_frame_work.uds_work);
+	if (ret == 1) {
+		LOG_INF("First submission to queue\n");
+	} else if (ret == 0) {
+		LOG_INF("Work already on queue\n");
+	} else if (ret == 2) {
+		LOG_INF("Work already running on queue\n");
+	} else {
+		LOG_ERR("Failed to queue\n");
+	}
+}
+
+void uds_timer_function(struct k_timer *dummy)
+{
+	UDSServerPoll(&srv);
+}
+
 static int uds_init()
 {
 	uint8_t ret = 0;
@@ -122,16 +179,23 @@ static int uds_init()
 		LOG_ERR("Failed to set timing\n");
 	}
 
+	k_work_init(&can_frame_work.uds_work, uds_poll_work_handler);
+
 	struct can_filter filter;
 
 	filter.id = 0;
 	filter.mask = 0; // TODO: Filter the messages here
 	filter.flags = 0;
 
-	ret = can_add_rx_filter_msgq(can_dev, &can_msgq, &filter);
+	ret = can_add_rx_filter(can_dev, &can_queue_uds_work, NULL, &filter);
 	if (ret < 0) {
-		LOG_ERR("Failed to add filter %d\n", ret);
+		LOG_ERR("Failed to add callback filter %d\n", ret);
 	}
+
+	// ret = can_add_rx_filter_msgq(can_dev, &can_msgq, &filter);
+	// if (ret < 0) {
+	// LOG_ERR("Failed to add msgq filter %d\n", ret);
+	// }
 
 	ret = can_start(can_dev);
 	if (ret != 0) {
@@ -156,30 +220,12 @@ static int uds_init()
 	srv.fn = fn;
 	srv.tp = &tp.hdl;
 
+	k_timer_init(&uds_timer, uds_timer_function, NULL);
+
+	k_timer_start(&uds_timer, K_MSEC(1000), K_MSEC(100));
+
 	return 0;
 }
+
 #define UDS_INIT_PRIO 32
 SYS_INIT(uds_init, APPLICATION, UDS_INIT_PRIO);
-
-uint8_t uds_poll_server()
-{
-	struct can_frame frame;
-	if (k_msgq_get(&can_msgq, &frame, K_MSEC(100)) == 0) {
-		if (frame.id == tp.phys_sa) {
-			LOG_INF("Received phys can id 0x%03x\n", frame.id);
-			isotp_on_can_message(&tp.phys_link, frame.data, frame.dlc);
-		} else if (frame.id == tp.func_sa) {
-			LOG_INF("Received func can id 0x%03x\n", frame.id);
-			if (ISOTP_RECEIVE_STATUS_IDLE != tp.phys_link.receive_status) {
-				LOG_ERR("Func frame received but cannot process because link is not "
-				       "idle\n");
-				return 0;
-			}
-			isotp_on_can_message(&tp.func_link, frame.data, frame.dlc);
-		} else {
-			LOG_ERR("Received unknown can id 0x%03x\n", frame.id);
-		}
-	}
-	UDSServerPoll(&srv);
-	return 0;
-}

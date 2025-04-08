@@ -29,7 +29,7 @@ int main()
 	bool led_state = true;
 
 	for (;;) {
-		ret = uds_poll_server();
+		k_sleep(K_MSEC(1000));
 		led_state = !led_state;
 	}
 }
