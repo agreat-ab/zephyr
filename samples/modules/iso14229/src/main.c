@@ -44,6 +44,11 @@ int main(void)
 		return 0;
 	}
 
+	ret = uds_init();
+	if (ret < 0) {
+		return 0;
+	}
+
 	for (;;) {
 		k_sleep(K_MSEC(1000));
 		led_state = !led_state;

@@ -12,6 +12,9 @@ menuconfig ISO14229
 
 if ISO14229
 
+config ISO14229_SYS_INIT
+	bool "Initialization by zephyr or by app"
+
 config ISO14229_DEFAULT_SESSION_TIMEOUT_MS
 	int "Default diagnostic session timeout (ms)"
 	default 5000

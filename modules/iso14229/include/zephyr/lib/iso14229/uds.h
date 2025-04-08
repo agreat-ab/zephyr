@@ -15,14 +15,7 @@ extern "C" {
  */
 uint32_t UDSMillis(void);
 
-/**
- * @brief Poll the UDS server for incoming messages
- *
- * This function should be called periodically to process incoming messages.
- *
- * @return uint8_t 0 if successful
- */
-uint8_t uds_poll_server(void);
+int uds_init(void);
 
 /* Define handler signatures for service handlers, to enforce use of the correct */
 /* args-structure */

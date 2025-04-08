@@ -15,13 +15,22 @@ typedef struct {
 	void *context;
 } uds_service_handler_t;
 
+static bool uds_initialized;
+
 static uds_service_handler_t service_handler_registry[UDS_EVT_MAX] = {0};
 
+/* Returns -2 if the uds module is already initialized */
 uint8_t uds_register_service_handler(UDSEvent_t evt, UDSGenericHandler_t handler, void *context)
 {
+	if (uds_initialized) {
+		LOG_ERR("Cannot register UDS service when UDS module is initialized.");
+		return -2;
+	}
+
 	if (service_handler_registry[evt].evt != 0) {
 		return -1;
 	}
+
 	service_handler_registry[evt].evt = evt;
 	service_handler_registry[evt].handler = handler;
 	service_handler_registry[evt].context = context;
@@ -159,11 +168,16 @@ void uds_timer_function(struct k_timer *dummy)
 	UDSServerPoll(&srv);
 }
 
-static int uds_init(void)
+int uds_init(void)
 {
 	uint8_t ret = 0;
 
 	LOG_DBG("Initializing CAN UDS module\n");
+
+	if (uds_initialized) {
+		LOG_ERR("Cannot register UDS service when UDS module is initialized.");
+		return -2;
+	}
 
 	can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
 	if (!device_is_ready(can_dev)) {
@@ -178,10 +192,9 @@ static int uds_init(void)
 
 	struct can_timing timing;
 
-	ret = can_calc_timing(can_dev, &timing, CONFIG_UDS_CAN_BITRATE,
-			      CONFIG_UDS_CAN_SAMPLEPOINT);
-				  /* Sampling point relates to tradeoff */
-				  /* between bandwidth and bus length */
+	ret = can_calc_timing(can_dev, &timing, CONFIG_UDS_CAN_BITRATE, CONFIG_UDS_CAN_SAMPLEPOINT);
+	/* Sampling point relates to tradeoff */
+	/* between bandwidth and bus length */
 	if (ret > 0) {
 		LOG_DBG("Sample-Point error: %d\n", ret);
 	}
@@ -242,8 +255,12 @@ static int uds_init(void)
 
 	k_timer_start(&uds_timer, K_MSEC(1000), K_MSEC(100));
 
+	uds_initialized = true;
+
 	return 0;
 }
 
+#ifdef CONFIG_ISO14229_SYS_INIT
 #define UDS_INIT_PRIO 32
 SYS_INIT(uds_init, APPLICATION, UDS_INIT_PRIO);
+#endif
