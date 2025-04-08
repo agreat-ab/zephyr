@@ -72,6 +72,9 @@ if(CONFIG_ISO14229)
 
   # Add the include path for the generated header
   zephyr_include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
+
+  # Add the include path for the module
+  zephyr_library_include_directories(include)
   zephyr_include_directories(include)
 
   # Link the library with the interface
@@ -81,6 +84,9 @@ if(CONFIG_ISO14229)
   if(NOT CONFIG_ISO14229_MINIMAL_BUILD)
     target_include_directories(iso14229 INTERFACE
       ${ZEPHYR_CURRENT_MODULE_DIR}/src
+    )
+    target_include_directories(iso14229 INTERFACE
+      ${ZEPHYR_CURRENT_MODULE_DIR}/include
     )
   endif()
 endif()

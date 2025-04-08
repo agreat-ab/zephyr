@@ -2,6 +2,7 @@
 #define UDS_H_
 
 #include <stdint.h>
+#include <zephyr/lib/iso14229/iso14229.h>
 
 #ifdef __cplusplus
 extern "C" {

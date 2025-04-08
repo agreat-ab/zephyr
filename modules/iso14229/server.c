@@ -1,15 +1,12 @@
 #include <stdint.h>
-
 #include <stdbool.h>
-#include <zephyr/lib/iso14229/iso14229.h>
-#include <zephyr/lib/iso14229/uds.h>
 #include <zephyr/kernel.h>
-#include <zephyr/version.h>
-#include <zephyr/toolchain/common.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/can.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/drivers/can.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/toolchain/common.h>
+#include <zephyr/lib/iso14229/uds.h>
 
 UDSServer_t srv;
 UDSISOTpC_t tp;
@@ -17,9 +14,10 @@ UDSISOTpC_t tp;
 LOG_MODULE_REGISTER(uds, CONFIG_LOG_DEFAULT_LEVEL);
 
 static const UDSISOTpCConfig_t tp_cfg = {
-	.source_addr = CONFIG_ISO14229_TX_ID,
-	.target_addr = CONFIG_ISO14229_RX_ID,
+	.source_addr = CONFIG_ISO14229_RX_ID,
+	.target_addr = CONFIG_ISO14229_TX_ID,
 	.source_addr_func = CONFIG_ISO14229_FUNC_RX_ID,
+	// TODO: Should func address only be one?
 	.target_addr_func = UDS_TP_NOOP_ADDR,
 };
 
@@ -27,17 +25,19 @@ const struct device *can_dev;
 
 static struct k_timer uds_timer;
 
-K_MSGQ_DEFINE(can_msgq, sizeof(struct can_frame), CONFIG_ISO14229_CAN_MSGQ_SIZE, 4);
-
 struct can_frame_work_info {
 	struct k_work uds_work;
 	struct can_frame frame;
 } can_frame_work;
 
+// TODO: If we handle can frames in fast succession we will lose data
+
 int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, const uint8_t size,
 			void *user_data)
 {
-	// TODO: Add some parameter validation here
+	if (size > CAN_MAX_DLEN) {
+		LOG_ERR("Data exceeds CAN frame limit (CAN_MAX_DLEN=%d)", CAN_MAX_DLEN);
+	}
 	struct can_frame frame = {
 		.id = arbitration_id,
 		.flags = 0x0,
@@ -46,12 +46,11 @@ int isotp_user_send_can(const uint32_t arbitration_id, const uint8_t *data, cons
 	memcpy(frame.data, data, size);
 
 	uint32_t ret = can_send(can_dev, &frame, K_MSEC(100), NULL, NULL);
-
 	if (ret < 0) {
-		LOG_ERR("Failed to send CAN frame (%d)\n", ret);
-		return -1;
+		LOG_ERR("Failed to send CAN frame, %d\n", ret);
+		return ISOTP_RET_ERROR; // TODO: Should we return for retransmission ever?
 	} else {
-		return size;
+		return ISOTP_RET_OK;
 	}
 }
 
@@ -63,6 +62,7 @@ void isotp_user_debug(const char *msg, ...)
 uint32_t UDSMillis(void)
 {
 	// Return milliseconds from system, assumed relative time is sufficient
+	// TODO: Is assumption correct?
 	return k_uptime_get_32();
 }
 
@@ -94,19 +94,21 @@ static UDSErr_t fn(UDSServer_t *srv, UDSEvent_t ev, void *arg)
 
 void uds_handle_frame(struct can_frame *frame)
 {
-	LOG_INF("Handling work for UDS");
+	LOG_DBG("Handling work for UDS");
 
 	if (frame->id == tp.phys_sa) {
-		LOG_INF("Received phys can id 0x%03x\n", frame->id);
+		LOG_DBG("Received phys can id 0x%03x\n", frame->id);
 		isotp_on_can_message(&tp.phys_link, frame->data, frame->dlc);
 	} else if (frame->id == tp.func_sa) {
-		LOG_INF("Received func can id 0x%03x\n", frame->id);
+		LOG_DBG("Received func can id 0x%03x\n", frame->id);
 		if (ISOTP_RECEIVE_STATUS_IDLE != tp.phys_link.receive_status) {
 			LOG_ERR("Func frame received but cannot process because link is "
 				"not "
 				"idle\n");
+			// TODO: Should we not retransmit this?
+		} else {
+			isotp_on_can_message(&tp.func_link, frame->data, frame->dlc);
 		}
-		isotp_on_can_message(&tp.func_link, frame->data, frame->dlc);
 	} else {
 		LOG_ERR("Received unknown can id 0x%03x\n", frame->id);
 	}
@@ -129,9 +131,9 @@ void can_queue_uds_work(const struct device *dev, struct can_frame *frame, void 
 	if (ret == 1) {
 		LOG_INF("First submission to queue\n");
 	} else if (ret == 0) {
-		LOG_INF("Work already on queue\n");
+		LOG_ERR("Work already on queue\n");
 	} else if (ret == 2) {
-		LOG_INF("Work already running on queue\n");
+		LOG_ERR("Work already running on queue\n");
 	} else {
 		LOG_ERR("Failed to queue\n");
 	}
@@ -148,35 +150,38 @@ static int uds_init()
 
 	k_work_init_delayable(&reboot_work, do_reboot);
 
-	LOG_INF("Initializing CAN UDS module\n");
+	LOG_DBG("Initializing CAN UDS module\n");
 
 	can_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_canbus));
 	if (!device_is_ready(can_dev)) {
-		LOG_INF("CAN: Device driver not ready.\n");
-		return 0;
+		LOG_ERR("CAN: Device driver not ready.\n");
+		return -1;
 	}
 
 	ret = can_stop(can_dev);
 	if (ret != 0) {
-		LOG_INF("CAN controller already stopped\n");
+		LOG_DBG("CAN controller already stopped\n");
 	}
 
 	struct can_timing timing;
+	// TODO: Make sampling point into Kconfig, and bitrate
 	ret = can_calc_timing(
 		can_dev, &timing, 500000,
 		875); // Sampling point relates to tradeoff between bandwidth and bus length
 	if (ret > 0) {
-		LOG_ERR("Sample-Point error: %d\n", ret);
+		LOG_DBG("Sample-Point error: %d\n", ret);
 	}
 
 	if (ret < 0) {
 		LOG_ERR("Failed to calc a valid timing\n");
-		return 0;
+		// TODO: Fallback sampling point value?
+		return -1;
 	}
 
 	ret = can_set_timing(can_dev, &timing);
 	if (ret != 0) {
 		LOG_ERR("Failed to set timing\n");
+		return -1;
 	}
 
 	k_work_init(&can_frame_work.uds_work, uds_poll_work_handler);
@@ -190,17 +195,13 @@ static int uds_init()
 	ret = can_add_rx_filter(can_dev, &can_queue_uds_work, NULL, &filter);
 	if (ret < 0) {
 		LOG_ERR("Failed to add callback filter %d\n", ret);
+		return -1;
 	}
-
-	// ret = can_add_rx_filter_msgq(can_dev, &can_msgq, &filter);
-	// if (ret < 0) {
-	// LOG_ERR("Failed to add msgq filter %d\n", ret);
-	// }
 
 	ret = can_start(can_dev);
 	if (ret != 0) {
 		LOG_ERR("Failed to start CAN controller\n");
-		return 0;
+		return -1;
 	} else {
 		LOG_INF("CAN controller configuration sucessful!\n");
 	}
@@ -209,12 +210,12 @@ static int uds_init()
 	uds_ret = UDSServerInit(&srv);
 	if (uds_ret != 0) {
 		LOG_ERR("Failed to initialize UDS server\n");
-		return 0;
+		return -1;
 	}
 	uds_ret = UDSISOTpCInit(&tp, &tp_cfg);
 	if (uds_ret != 0) {
 		LOG_ERR("Failed to initialize UDS ISO-TP client\n");
-		return 0;
+		return -1;
 	}
 
 	srv.fn = fn;

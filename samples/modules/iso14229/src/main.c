@@ -1,12 +1,6 @@
-#include "shim.h"
 #include <stdint.h>
-#include <stdbool.h>
-#include <zephyr/lib/iso14229/uds.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/can.h>
-#include <zephyr/sys/reboot.h>
-#include <zephyr/logging/log.h>
 
 #define SLEEP_TIME_MS 1000
 #define LED0_NODE     DT_ALIAS(led0)

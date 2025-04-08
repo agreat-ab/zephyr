@@ -30,14 +30,14 @@ config ISO14229_CAN_MSGQ_SIZE
 
 config ISO14229_RX_ID
 	hex "CAN ID for receiving UDS requests (point to point)"
-	default 0x7E0
+	default 0x7E8
 	range 0x0 0x7FF
 	help
 	  CAN ID for receiving UDS requests (default: 0x7E0).
 
 config ISO14229_TX_ID
 	hex "CAN ID for transmitting UDS responses (point to point)"
-	default 0x7E8
+	default 0x7E0
 	range 0x0 0x7FF
 	help
 	  CAN ID for transmitting UDS responses (default: 0x7E8).
