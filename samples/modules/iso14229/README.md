@@ -1,3 +1,64 @@
+# TODO
+
+- [ ] Contact the author of driftregion/iso14229
+- [ ] Start the license approval process
+
+# RFC
+
+## Problem description
+
+## Overview of proposal
+
+This is a proposal to introduce a module that provides a UDS server that can communicate over CAN according to ISO14229-3. The module will provide a layer for translating ISO-TP (ISO15765-2) to UDS, as well as mechanisms for some flow control, but it will be up to each user of the module to define responses to the services.
+
+## Use cases
+
+Define methods for e.g. reading memory, flashing and resetting your ECU using a UDS compliant tool on
+an external machine, connected via CAN bus.
+
+## Design details
+
+The current naive prototype can be divided into three parts, one external library, bridging code between the library and Zephyr interfaces, as well as an API for the module user.
+
+The library (driftregion/iso14229,
+[https://github.com/driftregion/iso14229/tree/main]) implements part of
+the UDS protocol, and bundles an ISO-TP implementation. This was the most appropriate
+existing library that I was able to findl. For each service, the library defines an
+Args struct that provides the service-unique parameters.
+
+The layer between the library and zephyr interfaces, will also provide most of the API to the
+module user.
+
+The layer backend consists of a callback that passes CAN frames from the zephyr CAN subsystem to
+the library isotp interface. It also consists of a timer that triggers UDS frame processing in the
+library UDSServer.
+
+The layer frontend (module user API) consists of a init function, Kconfig options for CAN
+addresses, bitrate, etc. and an interface for registering service callbacks.
+
+### API
+
+## Dependencies
+
+## Concerns and Unresolved questions
+
+- what mode of external component integration should be used?
+- is the current thread safety strategy for the registry ok?
+- is the third party library appropriate for use?
+
+## Alternatives
+
+Some alternatives to my current approach:
+
+* Implement iso14229 from scratch instead of using a third party library
+*
+
+## Test Strategy
+
+For now I have only tested the prototype with hardware (mr_canhubk3), but my aim is to set up
+unittests and (if possible) integration tests using qemu and socketcan.
+
+
 # Hardware setup for testing
 
 RPi (USB)->J-Link Base -> J-Link Cortex-M adapter -> SWD cable -> *DCD-LZ breakout board*
