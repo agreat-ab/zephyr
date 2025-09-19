@@ -3,6 +3,9 @@
 
 config ZEPHYR_ISO14229_MODULE
 	bool
+	default y
+	help
+	  Internal flag marking this directory as an ISO14229 Zephyr module.
 
 menuconfig ISO14229
 	bool "ISO14229 UDS Protocol Stack"
@@ -12,8 +15,21 @@ menuconfig ISO14229
 
 if ISO14229
 
+config ISO14229_LOG_DEFAULT_LEVEL
+	int "Default log level (fallback if CONFIG_LOG_DEFAULT_LEVEL not set)"
+	default 3
+	range 0 4
+	help
+	  Used to ensure LOG_MODULE_REGISTER(uds, CONFIG_LOG_DEFAULT_LEVEL)
+	  always has a valid value even if CONFIG_LOG_DEFAULT_LEVEL is missing.
+
 config ISO14229_SYS_INIT
 	bool "Initialization by zephyr or by app"
+	default n
+	help
+	  If enabled, the ISO14229 UDS module is automatically initialized
+	  via SYS_INIT() at application startup. Disable this for unit tests
+	  so uds_init() must be called manually.
 
 config ISO14229_DEFAULT_SESSION_TIMEOUT_MS
 	int "Default diagnostic session timeout (ms)"
@@ -78,4 +94,17 @@ config ISO14229_LOG_LEVEL
 	  3 = Error, warning, and info messages (UDS_LOG_INFO)
 	  4 = All messages including debug (UDS_LOG_DEBUG)
 
+config ISO14229_TEST
+	bool "ISO14229 internal test helpers"
+	help
+	  Internal test-only APIs (such as uds_internal_reset_for_tests())
+	  used by Zephyr unit tests and ztest-based validation.
+
+config ISO14229_DAEMONIZE_THREAD
+	bool "Daemonize UDS worker thread (unsupported on native_sim)"
+	default y if !ARCH_POSIX
+	default n if ARCH_POSIX
+	help
+	  Daemonizes the UDS worker thread in Zephyr.
+	  Unsupported on native POSIX simulations and automatically disabled there.
 endif # ISO14229

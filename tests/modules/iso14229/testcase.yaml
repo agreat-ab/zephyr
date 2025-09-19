@@ -1,0 +1,10 @@
+tests:
+  .iso14229:
+    modules:
+      - iso14229
+    tags:
+      - iso14229
+    integration_platforms:
+      - native_sim/native/64
+    harness: ztest
+    ignore_faults: false
