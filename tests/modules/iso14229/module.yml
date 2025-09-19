@@ -1,0 +1,7 @@
+# Module descriptor so Zephyr detects iso14229 as a valid module
+name: iso14229
+build:
+  cmake: .
+  kconfig: Kconfig
+  depends:
+    - zephyr
