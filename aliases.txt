@@ -1,0 +1,7 @@
+# Helper script to simplify board names.
+# Use in build with:
+# export ZEPHYR_BOARD_ALIASES=(path)/aliases.txt
+# use aliases in build: -b rpi2 or -b host
+
+set(rpi2_BOARD_ALIAS mr_canhubk3)
+set(host_BOARD_ALIAS native_sim)
